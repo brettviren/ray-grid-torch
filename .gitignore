@@ -1,0 +1,6 @@
+*~
+*.o
+*.so
+*.patch
+test_raygrid
+test_raytiling
