@@ -5,20 +5,7 @@
 #include <cassert>
 
 using namespace torch::indexing;
-
-// Helper for comparing tensors
-bool are_tensors_close(const torch::Tensor& a, const torch::Tensor& b, double rtol = 1e-05, double atol = 1e-08) {
-    if (a.sizes() != b.sizes()) {
-        std::cerr << "Tensor sizes mismatch: " << a.sizes() << " vs " << b.sizes() << std::endl;
-        return false;
-    }
-    bool is_close = torch::allclose(a, b, rtol, atol); //.item<bool>();
-    if (!is_close) {
-        std::cerr << "Tensors are not close:\na=" << a << "\nb=" << b << std::endl;
-        return false;
-    }
-    return true;
-}
+using WireCell::Spng::RayGrid::are_tensors_close;
 
 void test_three_view() {
     std::cout << "Running RayGrid tests..." << std::endl;

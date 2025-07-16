@@ -196,12 +196,11 @@ Tiling trivial();
  * @param coords The Coordinates object.
  * @param blobs The existing blobs tensor.
  * @param activity A 1D boolean tensor representing the new view's activity.
- * @param just_blobs If true, only the new blobs tensor is returned. Otherwise, a tuple of (blobs, crossings, insides) is returned.
- * @return The new blobs tensor or a tuple of tensors.
+ * @return The new blobs tensor
  */
-std::variant<torch::Tensor, std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>>
+torch::Tensor
 apply_activity(const Coordinates& coords, const torch::Tensor& blobs,
-               const torch::Tensor& activity, bool just_blobs = true);
+               const torch::Tensor& activity);
 
 
 } // namespace RayGrid

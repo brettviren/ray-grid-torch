@@ -11,6 +11,10 @@ namespace WireCell::Spng::RayGrid {
     // microboone-like detector.
     extern const std::map<std::string, torch::Tensor> ray_grid_coordinates_data;
 
+
+    // Helper for comparing tensors
+    bool are_tensors_close(const torch::Tensor& a, const torch::Tensor& b, double rtol = 1e-05, double atol = 1e-08);
+
 } // namespace
 
 #endif

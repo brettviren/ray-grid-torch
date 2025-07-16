@@ -1,18 +1,12 @@
 // test_raytiling.cpp
 #include "RayTiling.h"
 #include "RayGrid.h" // For WireCell::Spng::RayGrid::Coordinates
+#include "RayTest.h"
 #include <iostream>
 #include <cassert>
 #include <limits> // For std::numeric_limits
 
-// Helper for comparing tensors
-bool are_tensors_close(const torch::Tensor& a, const torch::Tensor& b, double rtol = 1e-05, double atol = 1e-08) {
-    if (a.sizes() != b.sizes()) {
-        std::cerr << "Tensor sizes mismatch: " << a.sizes() << " vs " << b.sizes() << std::endl;
-        return false;
-    }
-    return torch::allclose(a, b, rtol, atol); //.item<bool>();
-}
+using WireCell::Spng::RayGrid::are_tensors_close;
 
 int main() {
     std::cout << "Running RayTiling tests..." << std::endl;
@@ -59,28 +53,32 @@ int main() {
     std::cout << "trivial_blobs:\n" << t_blobs << std::endl;
 
     // Test blob_crossings
+    // (2 blobs, 2 views, 2 bounds)
     torch::Tensor bc_blobs = torch::tensor({
-        {{{0, 10}, {20, 30}}, {{40, 50}, {60, 70}}} // 2 blobs, 2 views, 2 bounds
+            {{0, 10}, {20, 30}},
+            {{40, 50}, {60, 70}}
     }, torch::kLong);
+    std::cout << "bc_blobs=" << bc_blobs << "\n";
     torch::Tensor bc_crossings = WireCell::Spng::RayGrid::blob_crossings(bc_blobs);
-    // Expected: (nblobs=1, npairs=1, 4, 2)
-    // npairs for 2 views is 1 (pair 0,1)
-    // edges: (0,0), (0,1), (1,0), (1,1)
-    // blob 0, view 0 bounds: [0,10], view 1 bounds: [20,30]
-    // rays_a: blobs[0,0,edges_a] -> [0,0,10,10]
-    // rays_b: blobs[0,1,edges_b] -> [20,30,20,30]
-    torch::Tensor expected_bc_crossings = torch::tensor({
-        {{{0, 20}, {0, 30}, {10, 20}, {10, 30}}}
-    }, torch::kLong);
+    std::cout << "bc_crossings:\n" << bc_crossings << std::endl;
+
+    // Expected: (2 blobs, 1 pair, 4 edges, 2 ray indices)
+    torch::Tensor expected_bc_crossings1 = torch::tensor({{0, 20}, {0, 30}, {10, 20}, {10, 30}}, torch::kLong);
+    torch::Tensor expected_bc_crossings2 = torch::tensor({{40, 60}, {40, 70}, {50, 60}, {50, 70}}, torch::kLong);
+    torch::Tensor expected_bc_crossings = torch::vstack({
+            expected_bc_crossings1.reshape({1,1,4,2}),
+            expected_bc_crossings2.reshape({1,1,4,2}),
+        });
+    std::cout << "expected_bc_crossings:\n" << expected_bc_crossings << std::endl;
     assert(are_tensors_close(bc_crossings.to(torch::kDouble), expected_bc_crossings.to(torch::kDouble)));
-    std::cout << "blob_crossings:\n" << bc_crossings << std::endl;
 
 
-    // Test flatten_crossings
+    // Test flatten_crossings, shape (nblobs, npairs, 4, 2)
     torch::Tensor fc_crossings = torch::tensor({
-        {{{ {0, 20}, {0, 30}, {10, 20}, {10, 30} }}}, // nblobs=1, npairs=1, 4, 2
-        {{{ {100, 120}, {100, 130}, {110, 120}, {110, 130} }}}
+        {{ {0, 20}, {0, 30}, {10, 20}, {10, 30} }}, // nblobs=1, npairs=1, 4, 2
+        {{ {100, 120}, {100, 130}, {110, 120}, {110, 130} }}
     }, torch::kLong);
+    std::cout << "fc_crossings:\n" << fc_crossings << std::endl;
     long fc_nviews = 2;
     torch::Tensor fc_v1, fc_r1, fc_v2, fc_r2;
     std::tie(fc_v1, fc_r1, fc_v2, fc_r2) = WireCell::Spng::RayGrid::flatten_crossings(fc_crossings, fc_nviews);
@@ -155,10 +153,10 @@ int main() {
 
     // Test blob_insides (simple case, nviews < 3)
     torch::Tensor bi_crossings_n2 = torch::tensor({
-        {{{ {0, 20}, {0, 30}, {10, 20}, {10, 30} }}} // 1 blob, 1 pair, 4 crossings, 2 ray indices
+            {{ {0, 20}, {0, 30}, {10, 20}, {10, 30} }} // 1 blob, 1 pair, 4 crossings, 2 ray indices
     }, torch::kLong);
     torch::Tensor bi_blobs_n2 = torch::tensor({
-        {{{0, 10}, {20, 30}}} // 1 blob, 2 views, 2 bounds
+            {{0, 10}, {20, 30}} // 1 blob, 2 views, 2 bounds
     }, torch::kLong);
     long bi_nviews_n2 = 2;
     torch::Tensor bi_insides_n2 = WireCell::Spng::RayGrid::blob_insides(coords, bi_crossings_n2, bi_nviews_n2, bi_blobs_n2);
@@ -180,6 +178,8 @@ int main() {
     torch::Tensor blobs_n3 = torch::cat({initial_blobs, hypothetical_third_view_bounds}, /*dim=*/1); // (1, 3, 2)
     
     torch::Tensor crossings_n3 = WireCell::Spng::RayGrid::blob_crossings(blobs_n3); // (1, 3, 4, 2)
+
+
     long nviews_n3 = 3;
 
     // To properly test blob_insides, we need a scenario where some crossings are *not* inside.
@@ -192,20 +192,25 @@ int main() {
     std::cout << "blob_insides (nviews=3):\n" << insides_n3 << std::endl;
     // assert(insides_n3.all().item<bool>()); // This assertion might fail depending on exact values.
 
-    // Test blob_bounds
-    torch::Tensor bb_lo, bb_hi;
-    std::tie(bb_lo, bb_hi) = WireCell::Spng::RayGrid::blob_bounds(coords, crossings_n3, nviews_n3, insides_n3);
-    std::cout << "blob_bounds: lo=" << bb_lo << ", hi=" << bb_hi << std::endl;
-    // Assertions here would depend on the specific values of coords, crossings_n3, insides_n3.
-    // For a basic check, ensure they are not empty and have correct shape.
-    assert(bb_lo.sizes() == torch::IntArrayRef({blobs_n3.size(0)}));
-    assert(bb_hi.sizes() == torch::IntArrayRef({blobs_n3.size(0)}));
+    // Gemini got confused here.  blob_bounds() is called in the process of
+    // making a new layer by applying an activity.  It may be called with
+    // blobs up to the penultimate layer supported by coords.
+    // // Test blob_bounds
+    // torch::Tensor bb_lo, bb_hi;
+    // std::tie(bb_lo, bb_hi) = WireCell::Spng::RayGrid::blob_bounds(coords, crossings_n3, nviews_n3, insides_n3);
+    // std::cout << "blob_bounds: lo=" << bb_lo << ", hi=" << bb_hi << std::endl;
+    // // Assertions here would depend on the specific values of coords, crossings_n3, insides_n3.
+    // // For a basic check, ensure they are not empty and have correct shape.
+    // assert(bb_lo.sizes() == torch::IntArrayRef({blobs_n3.size(0)}));
+    // assert(bb_hi.sizes() == torch::IntArrayRef({blobs_n3.size(0)}));
+
+
 
 
     // Test expand_blobs_with_activity
     torch::Tensor eba_blobs = torch::tensor({
-        {{{0, 10}, {20, 30}}}, // 1 blob, 2 views
-        {{{5, 15}, {25, 35}}}  // 1 blob, 2 views
+            {{0, 10}, {20, 30}}, // 1 blob, 2 views
+            {{5, 15}, {25, 35}}  // 1 blob, 2 views
     }, torch::kLong);
     torch::Tensor eba_lo = torch::tensor({0, 5}, torch::kLong);
     torch::Tensor eba_hi = torch::tensor({10, 15}, torch::kLong);
@@ -234,35 +239,13 @@ int main() {
     }, torch::kBool); // Length 11. Runs: [1,4), [6,8), [9,10)
 
     std::variant<torch::Tensor, std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>> result_aa_just_blobs =
-        WireCell::Spng::RayGrid::apply_activity(coords, aa_blobs, aa_activity, true);
+        WireCell::Spng::RayGrid::apply_activity(coords, aa_blobs, aa_activity);
 
     torch::Tensor final_blobs = std::get<torch::Tensor>(result_aa_just_blobs);
     std::cout << "apply_activity (just_blobs=true):\n" << final_blobs << std::endl;
     // The exact content depends on the `coords` object and the `activity`.
-    // For trivial blobs (0,1), (0,1) and the given activity (length 11):
-    // lo=0, hi=1 (from blob_bounds on trivial crossings)
-    // clamped to activity length: lo=0, hi=1 (still)
-    // expand_blobs_with_activity will intersect [0,1) with runs [1,4), [6,8), [9,10).
-    // No intersection, so expected to be empty.
-    assert(final_blobs.numel() == 0); // This might be the case for this specific activity and trivial blob.
-
-
-    // Test apply_activity (just_blobs=false)
-    std::variant<torch::Tensor, std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>> result_aa_full =
-        WireCell::Spng::RayGrid::apply_activity(coords, aa_blobs, aa_activity, false);
-
-    torch::Tensor full_blobs = std::get<0>(std::get<std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>>(result_aa_full));
-    torch::Tensor full_crossings = std::get<1>(std::get<std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>>(result_aa_full));
-    torch::Tensor full_insides = std::get<2>(std::get<std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>>(result_aa_full));
-
-    std::cout << "apply_activity (just_blobs=false):\n"
-              << "  Blobs:\n" << full_blobs << "\n"
-              << "  Crossings:\n" << full_crossings << "\n"
-              << "  Insides:\n" << full_insides << std::endl;
-    
-    assert(full_blobs.numel() == 0); // Still empty based on the above logic.
-    assert(full_crossings.sizes() == torch::IntArrayRef({1, 1, 4, 2})); // Crossings from initial 2-view blob
-    assert(full_insides.sizes() == torch::IntArrayRef({1, 1, 4})); // Insides from initial 2-view blob
+    torch::Tensor tofu_blobs = torch::tensor({{{0,1}, {0,1}, {1,2}}}, torch::kLong);
+    assert(are_tensors_close(tofu_blobs, final_blobs));
 
 
     std::cout << "All RayTiling tests passed!" << std::endl;

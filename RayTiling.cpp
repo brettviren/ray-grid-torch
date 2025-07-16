@@ -3,6 +3,8 @@
 #include "RayGrid.h" // For WireCell::Spng::RayGrid::Coordinates
 #include <iostream>
 
+using namespace torch::indexing;
+
 namespace WireCell {
 namespace Spng {
 namespace RayGrid {
@@ -49,21 +51,32 @@ torch::Tensor strip_pair_edge_indices() {
 torch::Tensor blob_crossings(const torch::Tensor& blobs) {
     long nstrips = blobs.size(1);
     // (npairs)
-    std::vector<torch::Tensor> views_unbound = strip_pairs(nstrips).unbind(/*dim=*/1);
+
+    auto sp = strip_pairs(nstrips);
+    std::vector<torch::Tensor> views_unbound = sp.unbind(/*dim=*/1);
     torch::Tensor views_a = views_unbound[0];
     torch::Tensor views_b = views_unbound[1];
+    // views shape (npairs,)
 
     std::vector<torch::Tensor> edges_unbound = strip_pair_edge_indices().unbind(/*dim=*/1);
     torch::Tensor edges_a = edges_unbound[0];
     torch::Tensor edges_b = edges_unbound[1];
+    // edges shape (4, )
 
     // (nblobs, npairs, 4)
     // Python: blobs[:, views_a, :][..., edges_a]
     // C++: Use advanced indexing
-    torch::Tensor rays_a = blobs.index({torch::indexing::Slice(), views_a, edges_a});
-    torch::Tensor rays_b = blobs.index({torch::indexing::Slice(), views_b, edges_b});
+    auto v_a = blobs.index({Slice(), views_a, Slice()});
+    auto v_b = blobs.index({Slice(), views_b, Slice()});
+    // v shape (nblobs, npairs, 2)
 
-    return torch::stack({rays_a, rays_b}, /*dim=*/3);
+    auto rays_a = v_a.index({Ellipsis, edges_a});
+    auto rays_b = v_b.index({Ellipsis, edges_b});
+    // ray shape (nblobs, npairs, 4)
+
+    auto bc = torch::stack({rays_a, rays_b}, /*dim=*/3);
+    // bc shape (nblobs, npairs, 4, 2)
+    return bc;
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
@@ -403,9 +416,9 @@ Tiling trivial() {
     return Tiling(blobs, crossings, insides);
 }
 
-std::variant<torch::Tensor, std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>>
+torch::Tensor
 apply_activity(const Coordinates& coords, const torch::Tensor& blobs_in,
-               const torch::Tensor& activity, bool just_blobs) {
+               const torch::Tensor& activity) {
     long nviews = blobs_in.size(1);
 
     torch::Tensor crossings = blob_crossings(blobs_in);
@@ -416,10 +429,7 @@ apply_activity(const Coordinates& coords, const torch::Tensor& blobs_in,
     std::tie(lo, hi) = bounds_clamp(lo, hi, activity.size(0));
     torch::Tensor new_blobs = expand_blobs_with_activity(blobs_in, lo, hi, activity);
 
-    if (just_blobs) {
-        return new_blobs;
-    }
-    return std::make_tuple(new_blobs, crossings, insides);
+    return new_blobs;
 }
 
 

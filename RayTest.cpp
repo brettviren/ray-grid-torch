@@ -3,6 +3,21 @@
 namespace WireCell::Spng::RayGrid {
 
 
+
+// Helper for comparing tensors
+bool are_tensors_close(const torch::Tensor& a, const torch::Tensor& b, double rtol, double atol) {
+    if (a.sizes() != b.sizes()) {
+        std::cerr << "Tensor sizes mismatch: " << a.sizes() << " vs " << b.sizes() << std::endl;
+        return false;
+    }
+    bool is_close = torch::allclose(a, b, rtol, atol); //.item<bool>();
+    if (!is_close) {
+        std::cerr << "Tensors are not close:\na=" << a << "\nb=" << b << std::endl;
+        return false;
+    }
+    return true;
+}
+
     // This is dumped from Python like:
     // >>> views = symmetric_views()
     // >>> coords = wirecell.raygrid.coordinates.Coordinates(views)
