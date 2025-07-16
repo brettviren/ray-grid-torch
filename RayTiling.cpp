@@ -106,7 +106,7 @@ torch::Tensor crossing_in_other(const Coordinates& coords,
                                 const torch::Tensor& rbegin3, const torch::Tensor& rend3,
                                 double nudge) {
     // pitches = coords.pitch_location((v1,r1), (v2,r2), v3)
-    torch::Tensor pitches = coords.pitch_location(torch::stack({v1, r1}, 0), torch::stack({v2, r2}, 0), v3);
+    torch::Tensor pitches = coords.pitch_location(v1, r1, v2, r2, v3);
 
     // pinds_lo = coords.pitch_index(pitches+nudge, v3)
     torch::Tensor pinds_lo = coords.pitch_index(pitches + nudge, v3);
@@ -307,7 +307,7 @@ blob_bounds(const Coordinates& coords, const torch::Tensor& crossings,
     torch::Tensor v3 = torch::full_like(v1, nviews, torch::kLong);
 
     // 3. Calculate pitches for all crossings
-    torch::Tensor pitches = coords.pitch_location(torch::stack({v1, r1}, 0), torch::stack({v2, r2}, 0), v3);
+    torch::Tensor pitches = coords.pitch_location(v1, r1, v2, r2, v3);
 
     // 4. Reshape pitches to (nblobs, npairs * 4) to align with flattened 'insides'
     torch::Tensor blob_pitches = pitches.reshape({nblobs, -1});

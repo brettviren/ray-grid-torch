@@ -64,9 +64,23 @@ torch::Tensor ray_direction(const torch::Tensor& ray) {
 
 // --- Coordinates class implementation ---
 
-Coordinates::Coordinates(const torch::Tensor& views) {
+Coordinates::Coordinates(const torch::Tensor& views)
+{
     init(views);
 }
+
+void Coordinates::to(torch::Device device)
+{
+    pitch_mag = pitch_mag.to(device);
+    pitch_dir = pitch_dir.to(device);
+    center = center.to(device);
+    zero_crossings = zero_crossings.to(device);
+    ray_jump = ray_jump.to(device);
+    ray_dir = ray_dir.to(device);
+    a = a.to(device);
+    b = b.to(device);
+}
+
 
 long Coordinates::nviews() const {
     return pitch_mag.size(0);
@@ -147,27 +161,14 @@ torch::Tensor Coordinates::point_indices(const torch::Tensor& points) const {
     return pitch_indices;
 }
 
-torch::Tensor Coordinates::ray_crossing(const torch::Tensor& one, const torch::Tensor& two) const {
-    // one and two can be scalar (2,) or batched (nbatch, 2)
-    // view1, ray1 = one
-    // view2, ray2 = two
-
-    // Extract view and ray indices. Use .select(dim, index) for single dimension access.
-    // For batched input, this will broadcast correctly.
-    torch::Tensor view1 = one.select(-1, 0);
-    torch::Tensor ray1 = one.select(-1, 1);
-    torch::Tensor view2 = two.select(-1, 0);
-    torch::Tensor ray2 = two.select(-1, 1);
-
+torch::Tensor Coordinates::ray_crossing(torch::Tensor view1, torch::Tensor ray1,
+                                        torch::Tensor view2, torch::Tensor ray2) const
+{
     // Ensure indices are long for indexing
     view1 = view1.to(torch::kLong);
     ray1 = ray1.to(torch::kLong);
     view2 = view2.to(torch::kLong);
     ray2 = ray2.to(torch::kLong);
-
-    // r00 = self.zero_crossings[view1, view2]
-    // w12 = self.ray_jump[view1, view2]
-    // w21 = self.ray_jump[view2, view1]
 
     // Use advanced indexing. If view1/view2 are scalar, this will be scalar.
     // If view1/view2 are 1D tensors, this will result in a batched tensor.
@@ -178,39 +179,31 @@ torch::Tensor Coordinates::ray_crossing(const torch::Tensor& one, const torch::T
     // return r00 + ray2 * w12 + ray1 * w21;
     // Need to unsqueeze ray1 and ray2 to match the dimensions of w12, w21, r00 for broadcasting
     // If r00, w12, w21 are (..., 2), then ray1/ray2 need to be (..., 1)
-    if (ray1.dim() < r00.dim() - 1) { // Check if ray1/ray2 are scalar or 1D when r00 is 2D or 3D
+    if (ray1.dim() < r00.dim()) { // Check if ray1/ray2 are scalar or 1D when r00 is 2D or 3D
         ray1 = ray1.unsqueeze(-1);
         ray2 = ray2.unsqueeze(-1);
     }
-    return r00 + ray2.to(r00.dtype()) * w12 + ray1.to(r00.dtype()) * w21;
+
+    return r00 + ray2 * w12 + ray1 * w21;
 }
 
-torch::Tensor Coordinates::pitch_location(const torch::Tensor& one, const torch::Tensor& two,
-                                         const torch::Tensor& view) const {
-    // view1, ray1 = one
-    // view2, ray2 = two
-    torch::Tensor view1 = one.select(-1, 0);
-    torch::Tensor ray1 = one.select(-1, 1);
-    torch::Tensor view2 = two.select(-1, 0);
-    torch::Tensor ray2 = two.select(-1, 1);
-
+torch::Tensor Coordinates::pitch_location(torch::Tensor view1, torch::Tensor ray1,
+                                          torch::Tensor view2, torch::Tensor ray2,
+                                          torch::Tensor view3) const
+{
     // Ensure indices are long for indexing
     view1 = view1.to(torch::kLong);
     ray1 = ray1.to(torch::kLong);
     view2 = view2.to(torch::kLong);
     ray2 = ray2.to(torch::kLong);
-    torch::Tensor k_view = view.to(torch::kLong); // The 'view' argument corresponds to 'ik' in Python's 'a' and 'b' tensors
-
-    // return self.b[view1, view2, view] 
-    //     + ray2 * self.a[view1, view2, view] 
-    //     + ray1 * self.a[view2, view1, view]
+    view3 = view3.to(torch::kLong);
 
     // Use advanced indexing.
-    // If view1/view2/k_view are scalar, this will be scalar.
-    // If view1/view2/k_view are 1D tensors, this will result in a batched tensor.
-    torch::Tensor b_val = b.index({view1, view2, k_view});
-    torch::Tensor a_val_12 = a.index({view1, view2, k_view});
-    torch::Tensor a_val_21 = a.index({view2, view1, k_view});
+    // If view1/view2/view3 are scalar, this will be scalar.
+    // If view1/view2/view3 are 1D tensors, this will result in a batched tensor.
+    torch::Tensor b_val = b.index({view1, view2, view3});
+    torch::Tensor a_val_12 = a.index({view1, view2, view3});
+    torch::Tensor a_val_21 = a.index({view2, view1, view3});
 
     // Ensure ray1 and ray2 are broadcastable with the result of indexing
     // If b_val, a_val_12, a_val_21 are scalar, ray1/ray2 should remain scalar.
@@ -225,7 +218,8 @@ torch::Tensor Coordinates::pitch_index(const torch::Tensor& pitch_val, const tor
     return torch::floor(pitch_val / mag_at_view).to(torch::kLong);
 }
 
-void Coordinates::init(const torch::Tensor& pitches_in) {
+void Coordinates::init(const torch::Tensor& pitches_user) {
+    torch::Tensor pitches_in = pitches_user.to(torch::kDouble);
     long nviews_val = pitches_in.size(0);
 
     // 1D (l) the magnitude of the pitch of view l.

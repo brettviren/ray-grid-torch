@@ -1,7 +1,10 @@
 // test_raygrid.cpp
 #include "RayGrid.h"
+#include "RayTest.h"
 #include <iostream>
 #include <cassert>
+
+using namespace torch::indexing;
 
 // Helper for comparing tensors
 bool are_tensors_close(const torch::Tensor& a, const torch::Tensor& b, double rtol = 1e-05, double atol = 1e-08) {
@@ -9,10 +12,15 @@ bool are_tensors_close(const torch::Tensor& a, const torch::Tensor& b, double rt
         std::cerr << "Tensor sizes mismatch: " << a.sizes() << " vs " << b.sizes() << std::endl;
         return false;
     }
-    return torch::allclose(a, b, rtol, atol); //.item<bool>();
+    bool is_close = torch::allclose(a, b, rtol, atol); //.item<bool>();
+    if (!is_close) {
+        std::cerr << "Tensors are not close:\na=" << a << "\nb=" << b << std::endl;
+        return false;
+    }
+    return true;
 }
 
-int main() {
+void test_three_view() {
     std::cout << "Running RayGrid tests..." << std::endl;
 
     // Test data (example from Python, adjust as needed)
@@ -94,46 +102,76 @@ int main() {
 
 
     // Test ray_crossing (scalar input)
+    {
+        torch::Tensor one_scalar = torch::tensor({0, 1}, torch::kLong); // view 0, ray 1
+        torch::Tensor two_scalar = torch::tensor({1, 1}, torch::kLong); // view 1, ray 1
+        torch::Tensor crossing_point_scalar = coords.ray_crossing(
+            one_scalar[0], one_scalar[1],
+            two_scalar[0], two_scalar[1]);
+        std::cout << "ray_crossing (scalar): " << crossing_point_scalar << std::endl;
+        assert(are_tensors_close(crossing_point_scalar, torch::tensor({1.0, 1.0}, torch::kDouble)));
+    }
+    {
+        torch::Tensor one_scalar = torch::tensor({0, 1}, torch::kLong); // view 0, ray 1
+        torch::Tensor two_scalar = torch::tensor({1, 0}, torch::kLong); // view 1, ray 0
+        torch::Tensor crossing_point_scalar = coords.ray_crossing(
+            one_scalar[0], one_scalar[1],
+            two_scalar[0], two_scalar[1]);
+        std::cout << "ray_crossing (scalar): " << crossing_point_scalar << std::endl;
+        assert(are_tensors_close(crossing_point_scalar, torch::tensor({1.0, 0.0}, torch::kDouble)));
+    }
+
+    // Expose this one to use below
     torch::Tensor one_scalar = torch::tensor({0, 0}, torch::kLong); // view 0, ray 0
     torch::Tensor two_scalar = torch::tensor({1, 0}, torch::kLong); // view 1, ray 0
-    torch::Tensor crossing_point_scalar = coords.ray_crossing(one_scalar, two_scalar);
+    torch::Tensor crossing_point_scalar = coords.ray_crossing(
+            one_scalar[0], one_scalar[1],
+            two_scalar[0], two_scalar[1]);
     std::cout << "ray_crossing (scalar): " << crossing_point_scalar << std::endl;
-    // For view 0 (x-axis) and view 1 (y-axis), ray 0 for both is the origin (0,0).
-    // So crossing point should be (0,0).
     assert(are_tensors_close(crossing_point_scalar, torch::tensor({0.0, 0.0}, torch::kDouble)));
+
 
     // Test ray_crossing (batched input)
     torch::Tensor one_batch = torch::tensor({
-        {0, 0}, {0, 1} // (view 0, ray 0), (view 0, ray 1)
+            {0, 0}, {0, 1}, {0, 1}
     }, torch::kLong);
     torch::Tensor two_batch = torch::tensor({
-        {1, 0}, {1, 0} // (view 1, ray 0), (view 1, ray 0)
+            {1, 0}, {1, 0}, {1, 1}
     }, torch::kLong);
-    torch::Tensor crossing_point_batch = coords.ray_crossing(one_batch, two_batch);
+    torch::Tensor crossing_point_batch = coords.ray_crossing(
+            one_batch.index({Slice(), 0}), one_batch.index({Slice(), 1}),
+            two_batch.index({Slice(), 0}), two_batch.index({Slice(), 1}));
+
     std::cout << "ray_crossing (batch):\n" << crossing_point_batch << std::endl;
     // (view 0, ray 0) and (view 1, ray 0) -> (0,0)
     // (view 0, ray 1) and (view 1, ray 0) -> (1,0) (ray 1 of view 0 is x=1, ray 0 of view 1 is y=0)
     torch::Tensor expected_crossing_batch = torch::tensor({
         {0.0, 0.0},
-        {1.0, 0.0}
+        {1.0, 0.0},
+        {1.0, 1.0}
     }, torch::kDouble);
     assert(are_tensors_close(crossing_point_batch, expected_crossing_batch));
 
 
     // Test pitch_location (scalar input)
     torch::Tensor view_idx_scalar = torch::tensor(2, torch::kLong); // View 2
-    torch::Tensor pitch_loc_scalar = coords.pitch_location(one_scalar, two_scalar, view_idx_scalar);
+    torch::Tensor pitch_loc_scalar = coords.pitch_location(
+        one_scalar[0], one_scalar[1],
+        two_scalar[0], two_scalar[1], view_idx_scalar);
     std::cout << "pitch_location (scalar): " << pitch_loc_scalar << std::endl;
     // For (0,0) and (1,0) crossing (which is (0,0)), its pitch in view 2 (diagonal) is 0.
     assert(are_tensors_close(pitch_loc_scalar, torch::tensor(0.0, torch::kDouble)));
 
     // Test pitch_location (batched input)
-    torch::Tensor view_idx_batch = torch::tensor({2, 2}, torch::kLong); // View 2 for both
-    torch::Tensor pitch_loc_batch = coords.pitch_location(one_batch, two_batch, view_idx_batch);
+    torch::Tensor view_idx_batch = torch::tensor({2, 2, 2}, torch::kLong); // View 2 for both
+    torch::Tensor pitch_loc_batch = coords.pitch_location(
+            one_batch.index({Slice(), 0}), one_batch.index({Slice(), 1}),
+            two_batch.index({Slice(), 0}), two_batch.index({Slice(), 1}),
+            view_idx_batch);
     std::cout << "pitch_location (batch):\n" << pitch_loc_batch << std::endl;
     // For (0,0) and (1,0) crossing (0,0), pitch in view 2 is 0.
     // For (0,1) and (1,0) crossing (1,0), pitch in view 2 is dot((1,0), (0.707,0.707)) = 0.707
-    torch::Tensor expected_pitch_loc_batch = torch::tensor({0.0, 0.70710678}, torch::kDouble);
+    torch::Tensor expected_pitch_loc_batch = torch::tensor({0.0, 0.70710678, 2*0.70710678}, torch::kDouble);
     assert(are_tensors_close(pitch_loc_batch, expected_pitch_loc_batch));
 
 
@@ -159,5 +197,41 @@ int main() {
 
     std::cout << "All RayGrid tests passed!" << std::endl;
 
-    return 0;
+}
+
+static
+torch::Tensor get_gcd(const std::string& key)
+{
+    const auto& gcd = WireCell::Spng::RayGrid::ray_grid_coordinates_data;
+    auto it = gcd.find(key);
+    if (it == gcd.end()) {
+        return torch::tensor({});
+    }
+    return it->second;
+}
+
+
+void test_same_as_python()
+{
+    auto views = get_gcd("views");
+    WireCell::Spng::RayGrid::Coordinates coords(views);
+    
+    auto a = get_gcd("a");
+    auto da = a - coords.a;
+
+    std::cout << "The 'a' tensor from Python:" << a << "\n";
+    std::cout << "The 'a' tensor from C++:" << coords.a << "\n";
+    std::cout << "The difference:" << da << "\n";
+
+    assert( are_tensors_close(a, coords.a) );
+
+    auto b = get_gcd("b");
+    assert( are_tensors_close(b, coords.b) );
+
+}
+
+int main()
+{
+    test_same_as_python();
+    test_three_view();
 }

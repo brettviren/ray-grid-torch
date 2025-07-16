@@ -11,7 +11,12 @@ CXX_STANDARD = -std=c++17
 # -Wall: Enable all standard warnings
 # -O2: Optimization level 2
 # -D_GLIBCXX_USE_CXX11_ABI=0: Optional, uncomment if you face ABI compatibility issues with LibTorch
-CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2
+CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2 -ggdb3
+
+## note: something, probably libtorch will print a stack trace on assert().
+## It lacks detail.  Use "where" or "bt full" in gdb to see line numbers, etc.
+
+
 
 # LibTorch Paths (Dynamically found using Python)
 # Ensure you have a Python environment with PyTorch installed
@@ -31,7 +36,7 @@ INC_FLAGS = -I. -I$(TORCH)/include -I$(TORCH)/include/torch/csrc/api/include
 LDFLAGS = -L$(TORCH)/lib -ltorch -ltorch_cpu -lc10 -Wl,-rpath=$(TORCH)/lib
 
 # Source files for the shared library
-RAYGRID_SRCS = RayGrid.cpp RayTiling.cpp
+RAYGRID_SRCS = RayGrid.cpp RayTiling.cpp RayTest.cpp
 RAYGRID_OBJS = $(RAYGRID_SRCS:.cpp=.o)
 
 # Test source files

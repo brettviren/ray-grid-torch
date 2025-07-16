@@ -50,8 +50,9 @@ torch::Tensor ray_direction(const torch::Tensor& ray);
 // --- Coordinates class ---
 
 class Coordinates {
+
 public:
-    // Attributes:
+    // Public tensor attributes.  All are dtype kDouble.
 
     // (Nview,) magnitude of pitch of each view
     torch::Tensor pitch_mag;
@@ -89,6 +90,13 @@ public:
     Coordinates(const torch::Tensor& views);
 
     /**
+     * @brief Move tensors to a device.
+     *
+     * Tensors are created on the CPU device but after construction can be moved.
+     */
+    void to(torch::Device);
+
+    /**
      * @brief Returns the number of views.
      * @return The number of views.
      */
@@ -124,23 +132,30 @@ public:
      *
      * Each coordinate is given as a pair (view,ray) of indices. These may be scalar or batched array.
      *
-     * @param one A tensor of shape (2) or (nbatch, 2) representing (view1, ray1).
-     * @param two A tensor of shape (2) or (nbatch, 2) representing (view2, ray2).
+     * @param view1 A scalar tensor or of shape (nbatch,) giving view indices for first ray.
+     * @param ray1 A scalar tensor or of shape (nbatch,) giving ray indices for first ray.
+     * @param view2 A scalar tensor or of shape (nbatch,) giving view indices for second ray.
+     * @param ray2 A scalar tensor or of shape (nbatch,) giving ray indices for second ray.
+
      * @return A tensor representing the crossing point(s).
      */
-    torch::Tensor ray_crossing(const torch::Tensor& one, const torch::Tensor& two) const;
+    torch::Tensor ray_crossing(torch::Tensor view1, torch::Tensor ray1,
+                               torch::Tensor view2, torch::Tensor ray2) const;
 
     /**
      * @brief Returns the pitch location measured in the given view (an index) of
      * the crossing point of ray grid coordinates one and two.
      *
-     * @param one A tensor of shape (2) or (nbatch, 2) representing (view1, ray1).
-     * @param two A tensor of shape (2) or (nbatch, 2) representing (view2, ray2).
-     * @param view A scalar tensor representing the view index.
+     * @param view1 A scalar tensor or of shape (nbatch,) giving view indices for first ray.
+     * @param ray1 A scalar tensor or of shape (nbatch,) giving ray indices for first ray.
+     * @param view2 A scalar tensor or of shape (nbatch,) giving view indices for second ray.
+     * @param ray2 A scalar tensor or of shape (nbatch,) giving ray indices for second ray.
+     * @param view3 A scalar tensor or of shape (nboatch,) representing the third view index.
      * @return A tensor representing the pitch location.
      */
-    torch::Tensor pitch_location(const torch::Tensor& one, const torch::Tensor& two,
-                                 const torch::Tensor& view) const;
+    torch::Tensor pitch_location(torch::Tensor view1, torch::Tensor ray1,
+                                 torch::Tensor view2, torch::Tensor ray2,
+                                 torch::Tensor view3) const;
 
     /**
      * @brief Returns the index of the closest ray at a location in the view that
