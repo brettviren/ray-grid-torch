@@ -1,0 +1,7 @@
+#+title: Ray Grid Torch / C++
+
+This holds a port of the Python/PyTorch version of ray grid in wire-cell-python,
+itself a re-implementation of the original RayGrid/RayTiling in WCT.  This repo
+holds the libtorch/C++ translation.  It's a temporary, stand-alone development
+package prior to moving the code into WCT's "spng" package.
+
