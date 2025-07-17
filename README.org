@@ -5,3 +5,23 @@ itself a re-implementation of the original RayGrid/RayTiling in WCT.  This repo
 holds the libtorch/C++ translation.  It's a temporary, stand-alone development
 package prior to moving the code into WCT's "spng" package.
 
+* Building
+
+This is not how to install WCT / spng, just for testing this package.
+
+#+begin_example
+$ uv venv
+$ source .venv/bin/activate.fish
+$ uv pip install torch
+$ python -c 'import torch; print(torch.__file__); print(torch.cuda.is_available())'
+#+end_example
+
+Should show a path under the ~.venv/~ and give ~True~.
+
+Help the linker find a versionless ~.so~
+
+#+begin_example
+$ cd .venv/lib/python3.13/site-packages/nvidia/cuda_runtime/lib/
+$ ln -s libcudart.{so.12,so}
+$ cd -
+#+end_example

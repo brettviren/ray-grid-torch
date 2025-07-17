@@ -16,26 +16,21 @@ CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2 -MMD
 ## note: something, probably libtorch will print a stack trace on assert().
 ## It lacks detail.  Use "where" or "bt full" in gdb to see line numbers, etc.
 
+TOP := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
+VENV = $(TOP)/.venv
 
+TORCH = $(VENV)/lib/python3.13/site-packages/torch
+TORCH_LDFLAGS = -L$(TORCH)/lib -Wl,-rpath=$(TORCH)/lib
+TORCH_LIBS = -ltorch -ltorch_cpu -lc10 -ltorch_cuda -lc10_cuda
+TORCH_INCFLAGS = -I$(TORCH)/include -I$(TORCH)/include/torch/csrc/api/include
 
-# LibTorch Paths (Dynamically found using Python)
-# Ensure you have a Python environment with PyTorch installed
-# LIBTORCH_INCLUDE = $(shell python -c "import torch; print(torch.utils.cpp_extension.include_paths()[0])")
-# LIBTORCH_LIB = $(shell python -c "import torch; print(torch.utils.cpp_extension.library_paths()[0])")
-TORCH = /home/bv/dev/wire-cell-python/.venv/lib/python3.12/site-packages/torch
-#LIBTORCH_INCLUDE 
-#LIBTORCH_LIB
+CUDA = $(VENV)/lib/python3.13/site-packages/nvidia/cuda_runtime
+CUDA_LDFLAGS = -L$(CUDA)/lib -Wl,-rpath=$(CUDA)/lib
+CUDA_LIBS = -lcudart
 
-# Include Paths
-INC_FLAGS = -I. -I$(TORCH)/include -I$(TORCH)/include/torch/csrc/api/include
-
-CUDA_LIBS = -ltorch -ltorch_cuda -lc10_cuda -lc10
-
-# Library Paths and Linker Flags
-# -L: Add directory to library search path
-# -l: Link with specified library
-# -Wl,-rpath: Add a runtime search path for shared libraries (important for running tests)
-LDFLAGS = -L$(TORCH)/lib -ltorch -ltorch_cpu -lc10 -Wl,-rpath=$(TORCH)/lib
+INC_FLAGS = -I. $(TORCH_INCFLAGS)
+LDFLAGS = $(TORCH_LDFLAGS) $(CUDA_LDFLAGS)
+LIBS = $(TORCH_LIBS) $(CUDA_LIBS)
 
 # Source files for the shared library
 RAYGRID_SRCS = RayGrid.cpp RayTiling.cpp RayTest.cpp
@@ -59,35 +54,19 @@ all: $(SHARED_LIB) $(TEST_BINS)
 
 # Rule to build the shared library
 $(SHARED_LIB): $(RAYGRID_OBJS)
-	$(CXX) $(CXXFLAGS) $(RAYGRID_OBJS) -shared -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(RAYGRID_OBJS) -shared -o $@ $(LDFLAGS) $(LIBS)
 
 # Rule to compile C++ source files into object files
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INC_FLAGS) -c $< -o $@
 
 test_%: test_%.o $(SHARED_LIB)
-	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) $(LIBS) -L. -lraygrid -Wl,-rpath=.
 
-
-# # Rule to build test_raygrid executable
-# test_raygrid: test_raygrid.o $(SHARED_LIB)
-# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
-
-# # Rule to build test_raygrid executable
-# test_raytest: test_raytest.o $(SHARED_LIB)
-# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
-
-# # Rule to build test_raytiling executable
-# test_raytiling: test_raytiling.o $(SHARED_LIB)
-# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
-
-# # Rule to build test_raytiling_speed executable
-# test_raytiling_speed: test_raytiling_speed.o $(SHARED_LIB)
-# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
 
 # Clean up generated files
 clean:
-	rm -f $(RAYGRID_OBJS) $(TEST_BINS) $(SHARED_LIB) *.o
+	rm -f $(RAYGRID_OBJS) $(TEST_BINS) $(SHARED_LIB) *.o *.d
 
 # Run all tests
 run_tests: $(TEST_BINS)
