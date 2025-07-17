@@ -11,7 +11,7 @@ CXX_STANDARD = -std=c++17
 # -Wall: Enable all standard warnings
 # -O2: Optimization level 2
 # -D_GLIBCXX_USE_CXX11_ABI=0: Optional, uncomment if you face ABI compatibility issues with LibTorch
-CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2 -ggdb3
+CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2 -MMD
 
 ## note: something, probably libtorch will print a stack trace on assert().
 ## It lacks detail.  Use "where" or "bt full" in gdb to see line numbers, etc.
@@ -29,6 +29,8 @@ TORCH = /home/bv/dev/wire-cell-python/.venv/lib/python3.12/site-packages/torch
 # Include Paths
 INC_FLAGS = -I. -I$(TORCH)/include -I$(TORCH)/include/torch/csrc/api/include
 
+CUDA_LIBS = -ltorch -ltorch_cuda -lc10_cuda -lc10
+
 # Library Paths and Linker Flags
 # -L: Add directory to library search path
 # -l: Link with specified library
@@ -40,8 +42,12 @@ RAYGRID_SRCS = RayGrid.cpp RayTiling.cpp RayTest.cpp
 RAYGRID_OBJS = $(RAYGRID_SRCS:.cpp=.o)
 
 # Test source files
-TEST_SRCS = test_raygrid.cpp test_raytiling.cpp
-TEST_BINS = $(TEST_SRCS:.cpp=)
+TEST_SRCS = $(wildcard test_*.cpp)
+# TEST_SRCS = test_raygrid.cpp test_raytiling.cpp test_raytiling_speed.cpp test_raytest.cpp
+# TEST_BINS = $(TEST_SRCS:.cpp=)
+TEST_BINS = $(patsubst %.cpp,%,$(TEST_SRCS))
+
+DEPS = $(patsubst %.cpp,%.d,$(TEST_SRCS))
 
 # Shared library name
 SHARED_LIB = libraygrid.so
@@ -59,13 +65,25 @@ $(SHARED_LIB): $(RAYGRID_OBJS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INC_FLAGS) -c $< -o $@
 
-# Rule to build test_raygrid executable
-test_raygrid: test_raygrid.o $(SHARED_LIB)
+test_%: test_%.o $(SHARED_LIB)
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
 
-# Rule to build test_raytiling executable
-test_raytiling: test_raytiling.o $(SHARED_LIB)
-	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
+
+# # Rule to build test_raygrid executable
+# test_raygrid: test_raygrid.o $(SHARED_LIB)
+# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
+
+# # Rule to build test_raygrid executable
+# test_raytest: test_raytest.o $(SHARED_LIB)
+# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
+
+# # Rule to build test_raytiling executable
+# test_raytiling: test_raytiling.o $(SHARED_LIB)
+# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
+
+# # Rule to build test_raytiling_speed executable
+# test_raytiling_speed: test_raytiling_speed.o $(SHARED_LIB)
+# 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) -L. -lraygrid -Wl,-rpath=.
 
 # Clean up generated files
 clean:
@@ -78,3 +96,4 @@ run_tests: $(TEST_BINS)
 	./test_raytiling
 	@echo "All tests finished."
 
+-include $(TEST_DEPS)

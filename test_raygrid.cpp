@@ -5,7 +5,7 @@
 #include <cassert>
 
 using namespace torch::indexing;
-using WireCell::Spng::RayGrid::are_tensors_close;
+using namespace WireCell::Spng::RayGrid;
 
 void test_three_view() {
     std::cout << "Running RayGrid tests..." << std::endl;
@@ -20,7 +20,7 @@ void test_three_view() {
     }, torch::kDouble);
 
     // Test constructor and basic attributes
-    WireCell::Spng::RayGrid::Coordinates coords(views);
+    Coordinates coords(views);
     std::cout << "nviews: " << coords.nviews() << std::endl;
     assert(coords.nviews() == 3);
 
@@ -186,22 +186,11 @@ void test_three_view() {
 
 }
 
-static
-torch::Tensor get_gcd(const std::string& key)
-{
-    const auto& gcd = WireCell::Spng::RayGrid::ray_grid_coordinates_data;
-    auto it = gcd.find(key);
-    if (it == gcd.end()) {
-        return torch::tensor({});
-    }
-    return it->second;
-}
-
 
 void test_same_as_python()
 {
     auto views = get_gcd("views");
-    WireCell::Spng::RayGrid::Coordinates coords(views);
+    Coordinates coords(views);
     
     auto a = get_gcd("a");
     auto da = a - coords.a;

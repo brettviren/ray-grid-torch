@@ -4,3 +4,6 @@
 *.patch
 test_raygrid
 test_raytiling
+test_raytest
+test_raytiling_speed
+*.d

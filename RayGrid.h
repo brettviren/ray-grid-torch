@@ -167,6 +167,14 @@ public:
      */
     torch::Tensor pitch_index(const torch::Tensor& pitch, const torch::Tensor& view) const;
 
+
+    /**
+     * @brief Returns the half-open indices bounds on each view that contain the
+     * crossing points of the first two views.  Returns shape (nviews, 2)
+     * giving.  Each row is (min,max).
+     */
+    torch::Tensor active_bounds() const;
+
 private:
     /**
      * @brief Initializes or reinitializes the coordinate system.
