@@ -22,6 +22,13 @@ int main(int argc, char* argv[])
     }
     else if (device_name == "gpu" || device_name == "cuda") {
         device = torch::Device(torch::kCUDA);
+        if (torch::cuda::is_available()) {
+            std::cerr << "CUDA is available for device: "<<device_name<<"\n";
+        }
+        else {
+            std::cerr << "CUDA is NOT available for device: "<<device_name<<"\n";
+            return 1;            
+        }
     }
 
     Stopwatch sw;
@@ -29,7 +36,7 @@ int main(int argc, char* argv[])
     auto views = symmetric_views(width, height, pitch_magnitude);
     assert(views.size(0) == 5);
     
-    std::cerr << "Made symmetric views in " << sw.restart() << " us, views=\n" << views << "\n";
+    std::cerr << "Made symmetric views in " << sw.restart() << " us, views=\n";;
 
     Coordinates coords(views);
     std::cerr << "Made coordinates " << sw.restart() << " us\n";
@@ -68,7 +75,8 @@ int main(int argc, char* argv[])
     }
     double us = sw.restart();
 
-    std::cerr << "Repeated " << ntries-1 << " in " << us << " us, " << ((ntries-1) / (1e-6*us)) <<  " Hz\n";
+    int ms = us/1000.0;
+    std::cerr << "Repeated " << ntries-1 << " in " << ms << " ms, " << ((ntries-1) / (1e-6*us)) <<  " Hz\n";
 
     return 0;
 }

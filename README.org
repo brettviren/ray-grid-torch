@@ -25,3 +25,73 @@ $ cd .venv/lib/python3.13/site-packages/nvidia/cuda_runtime/lib/
 $ ln -s libcudart.{so.12,so}
 $ cd -
 #+end_example
+
+Do the build
+
+#+begin_example
+$ make -j
+$ make run_tests
+#+end_example
+
+* Speed results
+
+The ~test_raytiling_speed~ test provides simple timing of tiling made from random
+points.
+
+#+begin_example
+$ ./test_raytiling_speed cpu
+$ ./test_raytiling_speed gpu
+
+$ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 ./test_raytiling_speed cpu
+$ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 ./test_raytiling_speed gpu
+#+end_example
+
+The latter two assure torch uses 1 CPU core.
+
+That test prints number of "blobs", "time 1k" to repeat blob finding 1000 times
+and this time as Hz.  While the program runs, we sample ~ps~ and the GPU with:
+
+#+begin_example
+ps -p $pid -o pid,rss,vsize,%cpu,args
+nvidia-smi --query-gpu=index,utilization.gpu,utilization.memory,memory.used,temperature.gpu,power.draw --format=csv
+#+end_example
+
+The ~ps~ reports "%CPU" and "RSS" and ~nvidia-smi~ reports "%GPU", "VRAM" and "power".
+
+Finally, the job was rerun until it produced approximately 700 blobs.
+
+|         |   cpu |   cpu |   gpu |   gpu | units   |
+|---------+-------+-------+-------+-------+---------|
+| threads |     1 |   all |     1 |   all | count   |
+|---------+-------+-------+-------+-------+---------|
+| blobs   |   749 |   669 |   652 |   697 | count   |
+| Time 1k | 1.401 | 2.628 | 2.267 | 2.295 | seconds |
+| Hz 1k   |   710 |   380 |   441 |   435 | Hz      |
+|---------+-------+-------+-------+-------+---------|
+| %CPU    |   100 |  2900 |   100 |   100 | %       |
+| RSS     |   330 |   335 |   808 |   808 | MB      |
+|---------+-------+-------+-------+-------+---------|
+| %GPU    |     - |     - |    37 |    37 | %       |
+| VRAM    |     - |     - |   473 |   473 | MB      |
+| power   |     - |     - |  53.1 |    54 | W       |
+|---------+-------+-------+-------+-------+---------|
+
+
+The uncertainty on the Time/Hz numbers is large due to both the randomness in
+initial points that lead to blob formation and perhaps also some startup
+overhead.  There is maybe a spread of 100-200 Hz for the threads=1 cpu job.
+
+A little surprising that single-core CPU is best.
+
+Note, the original ~test_raytiling_speed~ from WCT makes 1909 blobs 1000 times in
+a bit over 4 seconds using 100% CPU but only in 18 MB.  Rewriting the algorithm
+in vectorized form on top of torch appears to give "only" a factor of 2 speed
+up at the cost of substantial more memory.
+
+There is one remaining thing to check.  This test re-tiles the same time slice
+over and over.  The nominal DUNE HD readout has 1500 time slices (rebin-4 of
+6000 ticks).  If the SPNG / WCT flow graph splits time slices for individual
+tiling, we may see large gains.  Concern over how much of the approximately 300
+MB RSS and 800 MB VRAM overheads are unique to or shared by all threads will
+determine the feasibility of this parallelism.
+

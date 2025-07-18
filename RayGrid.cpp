@@ -203,11 +203,15 @@ namespace WireCell::Spng::RayGrid {
         torch::Tensor a_val_12 = a.index({view1, view2, view3});
         torch::Tensor a_val_21 = a.index({view2, view1, view3});
 
+        // std::cerr << "p.loc: ray1.device=" << ray1.device() << " b_val.device=" << b_val.device() << "\n";
+
         // Ensure ray1 and ray2 are broadcastable with the result of indexing
         // If b_val, a_val_12, a_val_21 are scalar, ray1/ray2 should remain scalar.
         // If they are 1D, ray1/ray2 should remain 1D.
-        return b_val + ray2.to(b_val.dtype()) * a_val_12 + ray1.to(b_val.dtype()) * a_val_21;
-    }
+        // return b_val + ray2.to(b_val.dtype()) * a_val_12 + ray1.to(b_val.dtype()) * a_val_21;
+        return b_val +
+            ray2.to(b_val.dtype()).to(b_val.device()) * a_val_12 +
+            ray1.to(b_val.dtype()).to(b_val.device()) * a_val_21;    }
 
     torch::Tensor Coordinates::pitch_index(const torch::Tensor& pitch_val, const torch::Tensor& view_idx) const {
         // return torch.floor(pitch/self.pitch_mag[view]).to(torch.long)
@@ -216,8 +220,14 @@ namespace WireCell::Spng::RayGrid {
         return torch::floor(pitch_val / mag_at_view).to(torch::kLong);
     }
 
-    void Coordinates::init(const torch::Tensor& pitches_user) {
-        torch::Tensor pitches_in = pitches_user.to(torch::kDouble);
+    void Coordinates::init(const torch::Tensor& pitches_user)
+    {
+        // Establish internal and return device/dtype
+        auto device = pitches_user.device();
+        auto FP_dtype = torch::kDouble;
+        auto FP_options = torch::TensorOptions().dtype(FP_dtype).device(device);
+
+        torch::Tensor pitches_in = pitches_user.to(FP_dtype);
         long nviews_val = pitches_in.size(0);
 
         // 1D (l) the magnitude of the pitch of view l.
@@ -238,7 +248,8 @@ namespace WireCell::Spng::RayGrid {
         center = pitches_in.index({torch::indexing::Slice(), 0, torch::indexing::Slice()});
 
         // self.ray_dir = torch.vstack((-self.pitch_dir[:,1], self.pitch_dir[:,0])).T
-        ray_dir = torch::stack({-pitch_dir.index({torch::indexing::Slice(), 1}),
+        ray_dir = torch::stack({
+                -pitch_dir.index({torch::indexing::Slice(), 1}),
                 pitch_dir.index({torch::indexing::Slice(), 0})}).transpose(0, 1);
 
         // ray0 = torch.vstack((self.center - self.ray_dir, self.center + self.ray_dir)).reshape(2,-1,2)
@@ -252,15 +263,15 @@ namespace WireCell::Spng::RayGrid {
         torch::Tensor ray1 = torch::stack({ray1_part1, ray1_part2}).reshape({2, -1, 2});
 
         // 3D (l,m,c) crossing point 2D coordinates c of "ray 0" of views l and m.
-        zero_crossings = torch::zeros({nviews_val, nviews_val, 2}, torch::kDouble);
+        zero_crossings = torch::zeros({nviews_val, nviews_val, 2}, FP_options);
 
         // 3D (l,m,c) difference vector coordinates c between two consecutive
         // m-view crossings along l ray direction.  between crossings of rays of view m.
-        ray_jump = torch::zeros({nviews_val, nviews_val, 2}, torch::kDouble);
+        ray_jump = torch::zeros({nviews_val, nviews_val, 2}, FP_options);
 
         // The Ray Grid tensor representations.
-        a = torch::zeros({nviews_val, nviews_val, nviews_val}, torch::kDouble);
-        b = torch::zeros({nviews_val, nviews_val, nviews_val}, torch::kDouble);
+        a = torch::zeros({nviews_val, nviews_val, nviews_val}, FP_options);
+        b = torch::zeros({nviews_val, nviews_val, nviews_val}, FP_options);
 
         // Cross-view things
         for (long il = 0; il < nviews_val; ++il) {
@@ -292,7 +303,7 @@ namespace WireCell::Spng::RayGrid {
                         // Python: print(f'skipping parallel view pair: {il=} {im=}')
                         // In C++, we'll just print to stderr or a log.
                         std::cerr << "skipping parallel view pair: il=" << il << " im=" << im << ": " << e.what() << std::endl;
-                        // Continue loop, as in Python's 'continue'
+
                     }
                 }
             }

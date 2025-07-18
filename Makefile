@@ -11,7 +11,7 @@ CXX_STANDARD = -std=c++17
 # -Wall: Enable all standard warnings
 # -O2: Optimization level 2
 # -D_GLIBCXX_USE_CXX11_ABI=0: Optional, uncomment if you face ABI compatibility issues with LibTorch
-CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2 -MMD
+CXXFLAGS = $(CXX_STANDARD) -fPIC -Wall -O2 -MMD -g
 
 ## note: something, probably libtorch will print a stack trace on assert().
 ## It lacks detail.  Use "where" or "bt full" in gdb to see line numbers, etc.
@@ -72,7 +72,9 @@ clean:
 run_tests: $(TEST_BINS)
 	@echo "Running tests..."
 	./test_raygrid
-	./test_raytiling
+	./test_raytest
+	./test_raytiling cpu
+	./test_raytiling gpu
 	@echo "All tests finished."
 
 -include $(TEST_DEPS)

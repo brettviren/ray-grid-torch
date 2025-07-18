@@ -158,8 +158,8 @@ int main() {
     torch::Tensor bi_blobs_n2 = torch::tensor({
             {{0, 10}, {20, 30}} // 1 blob, 2 views, 2 bounds
     }, torch::kLong);
-    long bi_nviews_n2 = 2;
-    torch::Tensor bi_insides_n2 = WireCell::Spng::RayGrid::blob_insides(coords, bi_crossings_n2, bi_nviews_n2, bi_blobs_n2);
+    // long bi_nviews_n2 = 2;
+    torch::Tensor bi_insides_n2 = WireCell::Spng::RayGrid::blob_insides(coords, bi_blobs_n2, bi_crossings_n2);
     torch::Tensor expected_bi_insides_n2 = torch::ones({1, 1, 4}, torch::kBool);
     assert(are_tensors_close(bi_insides_n2.to(torch::kDouble), expected_bi_insides_n2.to(torch::kDouble)));
     std::cout << "blob_insides (nviews=2):\n" << bi_insides_n2 << std::endl;
@@ -180,13 +180,13 @@ int main() {
     torch::Tensor crossings_n3 = WireCell::Spng::RayGrid::blob_crossings(blobs_n3); // (1, 3, 4, 2)
 
 
-    long nviews_n3 = 3;
+    // long nviews_n3 = 3;
 
     // To properly test blob_insides, we need a scenario where some crossings are *not* inside.
     // This is hard to set up with simple manual values without knowing the exact geometry.
     // Let's assume for now that all crossings are inside for a simple test.
     // A more robust test would involve specific coordinates and expected outcomes.
-    torch::Tensor insides_n3 = WireCell::Spng::RayGrid::blob_insides(coords, crossings_n3, nviews_n3, blobs_n3);
+    torch::Tensor insides_n3 = WireCell::Spng::RayGrid::blob_insides(coords, blobs_n3, crossings_n3);
     // For a simple test, if the blob is large enough, all might be true.
     // The actual values depend on 'coords' and 'blobs_n3'.
     std::cout << "blob_insides (nviews=3):\n" << insides_n3 << std::endl;
