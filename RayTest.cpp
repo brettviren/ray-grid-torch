@@ -421,8 +421,6 @@ torch::Tensor symmetric_views(
     // Initialize pitches tensor with the specified options
     torch::Tensor pitches = torch::zeros({5, 2, 2}, options);
 
-    std::cerr << "made pitches tensor\n";
-
     // horizontal ray bounds, pitch is vertical
     // pitches[0] = torch.tensor([[width/2.0, 0], [width/2.0, height]])
     pitches.index_put_({0}, torch::tensor(
@@ -435,15 +433,11 @@ torch::Tensor symmetric_views(
         {{0.0, height/2.0},
          {width, height/2.0}}, options));
 
-    std::cerr << "filled trivial pitches\n";
-
     // corners
     // Ensure these tensors are created with the same options as 'pitches'
     torch::Tensor ll = torch::tensor({0.0, 0.0}, options);
     torch::Tensor ul = torch::tensor({0.0, height}, options);
     torch::Tensor lr = torch::tensor({width, 0.0}, options);
-
-    std::cerr << "made ll/ul/lr\n";
 
     // /-wires
     // w = torch.tensor([math.sin(angle), math.cos(angle)])
@@ -459,8 +453,6 @@ torch::Tensor symmetric_views(
 
     // the symmetry (angle *= -1)
     angle *= -1.0; // Modify the angle directly for the next calculation
-
-    std::cerr << "made w/p\n";
 
     // \-wires
     // w = torch.tensor([math.sin(angle), math.cos(angle)])
@@ -479,8 +471,6 @@ torch::Tensor symmetric_views(
     pitches.index_put_({4}, torch::tensor(
         {{0.0, height/2.0},
          {pitch_mag, height/2.0}}, options));
-
-    std::cerr << "made all pitches\n";
 
     return pitches;
 }

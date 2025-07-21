@@ -10,33 +10,62 @@ const double width = 4000;
 const double height = 4000;
 
 
+torch::Device parse_device(const std::string& device_name)
+{
+    torch::Device device(torch::kCPU);
+    if (device_name == "cpu") {
+        return torch::Device(torch::kCPU);
+    }
+    if (device_name == "gpu" || device_name == "cuda") {
+        if (torch::cuda::is_available()) {
+            std::cerr << "CUDA is available for device: "<<device_name<<"\n";
+            return torch::Device(torch::kCUDA);
+        }
+        else {
+            std::cerr << "CUDA is NOT available for device: "<<device_name<<"\n";
+            throw std::runtime_error("No GPU available");
+        }
+    }
+    std::cerr << "Unknown device: "<<device_name<<"\n";
+    throw std::runtime_error("unknown device");
+}
+
 int main(int argc, char* argv[])
 {
     std::string device_name = "cpu";
     if (argc > 1) {
         device_name = argv[1];
     }
-    torch::Device device(torch::kCPU);
-    if (device_name == "cpu") {
-        device = torch::Device(torch::kCPU);
+    auto device = parse_device(device_name);
+
+
+    std::string autograd_name = "";
+    if (argc > 2) {
+        autograd_name = argv[2];
     }
-    else if (device_name == "gpu" || device_name == "cuda") {
-        device = torch::Device(torch::kCUDA);
-        if (torch::cuda::is_available()) {
-            std::cerr << "CUDA is available for device: "<<device_name<<"\n";
-        }
-        else {
-            std::cerr << "CUDA is NOT available for device: "<<device_name<<"\n";
-            return 1;            
-        }
+    bool use_autograd = false;
+    if (autograd_name == "yes" || autograd_name == "true") {
+        use_autograd = true;
     }
+    torch::AutoGradMode enable_grad(use_autograd);
+
+    std::string random_name = "";
+    if (argc > 3) {
+        random_name = argv[3];
+    }
+    if (random_name != "" ) {
+        int64_t random_seed = atol(random_name.c_str());
+        torch::manual_seed(random_seed);
+    }
+
+    std::cerr << "Device=" << device << " autograd='" << use_autograd << "', random seed='" << random_name << "'\n";
 
     Stopwatch sw;
 
     auto views = symmetric_views(width, height, pitch_magnitude);
     assert(views.size(0) == 5);
     
-    std::cerr << "Made symmetric views in " << sw.restart() << " us, views=\n";;
+    std::cerr << "Made symmetric views in " << sw.restart() << " us\n";;
 
     Coordinates coords(views);
     std::cerr << "Made coordinates " << sw.restart() << " us\n";
@@ -70,7 +99,7 @@ int main(int argc, char* argv[])
             assert (blobs.size(0) > 0);
         }            
         if (!tries) {
-            std::cerr << "Made " << blobs.size(0) << " blobs in " << sw.restart() << " us\n";
+            std::cerr << "Made first set of " << blobs.size(0) << " blobs in " << sw.restart() << " us\n";
         }
     }
     double us = sw.restart();
